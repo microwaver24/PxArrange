@@ -6,8 +6,14 @@
 		{
 			Log("start");
 
-			var arrangeInFolders = new ArrangeInFolders(doDryRun: true);
-			arrangeInFolders.Run();
+			//var arrangeInFolders = new ArrangeInFolders(doDryRun: true);
+			//arrangeInFolders.Run();
+
+			//var makeSlideshows = new MakeSlideshows(doDryRun: false);
+			//makeSlideshows.Run();
+
+			var moveSlideshowImages = new MoveSlideshowImages(doDryRun: true);
+			moveSlideshowImages.Run(slideshowIndex: 0);
 
 			Log("end");
 		}

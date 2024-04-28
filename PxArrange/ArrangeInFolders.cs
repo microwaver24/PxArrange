@@ -8,16 +8,6 @@ namespace PxArrange
 {
 	public class ArrangeInFolders
 	{
-		private static class ColumnNames
-		{
-			public const string ImageId = "image_id";
-			public const string MemberId = "member_id";
-		}
-
-		private const string _badPath = @"D:\H\Px\pixiv\bad";
-		private const string _freshPath = @"D:\H\Px\pixiv\fresh";
-		private const string _databasePath = @"D:\H\Px\bin\pixivutil20230105\db.sqlite";
-
 		public bool DoDryRun;
 		private int _imageIdOrdinal = -1;
 		private int _memberIdOrdinal = -1;
@@ -35,7 +25,37 @@ namespace PxArrange
 			var targetDirectories = GetTargetDirectories();
 			//Log("targetDirectories", targetDirectories);
 
-			DatabaseStuff(badFiles, targetDirectories);
+			//DatabaseStuff(badFiles, targetDirectories);
+
+			var imageTable = new ImageTable();
+			imageTable.Run("SELECT * FROM pixiv_master_image", ProcessRow);
+
+			void ProcessRow(ImageTableReader tableReader)
+			{
+				var imageId = tableReader.ImageId;
+				var memberId = tableReader.MemberId;
+
+				if (badFiles.ContainsKey(imageId) && targetDirectories.ContainsKey(memberId))
+				{
+					foreach (var filePath in badFiles[imageId])
+					{
+						var fileName = Path.GetFileName(filePath);
+						var outputDirectoryPath = targetDirectories[memberId][0];
+						var outputFilePath = Path.Combine(outputDirectoryPath, fileName);
+
+						var dryRunMessage = DoDryRun ? "DryRun: " : string.Empty;
+						Log($"{dryRunMessage}Move [{filePath}] to [{outputFilePath}]");
+
+						if (!DoDryRun)
+						{
+							File.Move(filePath, outputFilePath);
+						}
+
+						//++filesMoved;
+					}
+					badFiles.Remove(imageId);
+				}
+			}
 		}
 
 		[Conditional("ENABLE_LOG")]
@@ -57,7 +77,7 @@ namespace PxArrange
 		{
 			var connectionStringBuilder = new SqliteConnectionStringBuilder()
 			{
-				DataSource = _databasePath,
+				DataSource = PxPaths.DatabasePath,
 				Mode = SqliteOpenMode.ReadWriteCreate,
 			};
 			string connectionString = connectionStringBuilder.ToString();
@@ -75,8 +95,8 @@ namespace PxArrange
 
 				using var dbReader = command.ExecuteReader();
 
-				_imageIdOrdinal = dbReader.GetOrdinal(ColumnNames.ImageId);
-				_memberIdOrdinal = dbReader.GetOrdinal(ColumnNames.MemberId);
+				_imageIdOrdinal = dbReader.GetOrdinal(ImageTable.ColumnNames.ImageId);
+				_memberIdOrdinal = dbReader.GetOrdinal(ImageTable.ColumnNames.MemberId);
 
 				while (dbReader.Read())
 				{
@@ -123,10 +143,43 @@ namespace PxArrange
 			}
 		}
 
+		private void ProcessRow(
+			ImageTableReader tableReader,
+			SqliteDataReader dbReader,
+			Dictionary<int, List<string>> badFiles,
+			Dictionary<int, List<string>> targetDirectories,
+			ref int filesMoved
+		)
+		{
+			var imageId = dbReader.GetInt32(_imageIdOrdinal);
+			var memberId = dbReader.GetInt32(_memberIdOrdinal);
+
+			if (badFiles.ContainsKey(imageId) && targetDirectories.ContainsKey(memberId))
+			{
+				foreach (var filePath in badFiles[imageId])
+				{
+					var fileName = Path.GetFileName(filePath);
+					var outputDirectoryPath = targetDirectories[memberId][0];
+					var outputFilePath = Path.Combine(outputDirectoryPath, fileName);
+
+					var dryRunMessage = DoDryRun ? "DryRun: " : string.Empty;
+					Log($"{dryRunMessage}Move [{filePath}] to [{outputFilePath}]");
+
+					if (!DoDryRun)
+					{
+						File.Move(filePath, outputFilePath);
+					}
+
+					++filesMoved;
+				}
+				badFiles.Remove(imageId);
+			}
+		}
+
 		private Dictionary<int, List<string>> GetBadFiles()
 		{
 			var enumerationOptions = new EnumerationOptions() { RecurseSubdirectories = true, };
-			var originalFiles = Directory.EnumerateFiles(_badPath, "*", enumerationOptions);
+			var originalFiles = Directory.EnumerateFiles(PxPaths.BadPath, "*", enumerationOptions);
 
 			var fileLookup = new Dictionary<int, List<string>>();
 
@@ -154,7 +207,7 @@ namespace PxArrange
 
 		private Dictionary<int, List<string>> GetTargetDirectories()
 		{
-			var outputDirectories = Directory.EnumerateDirectories(_freshPath);
+			var outputDirectories = Directory.EnumerateDirectories(PxPaths.FreshPath);
 			var directoryLookup = new Dictionary<int, List<string>>();
 			var regex = new Regex(@"\((\d+)\)");
 
