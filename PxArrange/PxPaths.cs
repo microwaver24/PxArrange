@@ -62,8 +62,19 @@ namespace PxArrange
 			".webp",
 		};
 
-		public static readonly string[] OtherExtensions = ["zip", "json", "zip.js",];
+		public static readonly string[] OtherExtensionsWithoutDot;
 
-		public static readonly HashSet<string> ExpectedNonImageExtensions = new HashSet<string> { ".zip", };
+		public static readonly HashSet<string> OtherExtensions = new HashSet<string> { ".zip", ".json", ".zip.js", };
+
+		static PxPaths()
+		{
+			OtherExtensionsWithoutDot = new string[OtherExtensions.Count];
+			int i = 0;
+			foreach (var extension in OtherExtensions)
+			{
+				OtherExtensionsWithoutDot[i] = extension.Substring(1);
+				++i;
+			}
+		}
 	}
 }

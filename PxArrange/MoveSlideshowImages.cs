@@ -2,24 +2,13 @@
 
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace PxArrange
 {
 	public class MoveSlideshowImages
 	{
-		public static class KeySpace
-		{
-			public const string Deleted = "Deleted";
-			public const string Errors = "Errors";
-			public const string Invalid = "Invalid";
-			public const string Moved = "Moved";
-			public const string MovedImages = "Moved (Images)";
-			public const string NotFound = "Not Found";
-			public const string SkippedNotEmpty = "Skipped (Not Empty)";
-			public const string Total = "Total";
-		}
-
 		public bool DoDryRun;
 
 		public MoveSlideshowImages(bool doDryRun)
@@ -27,13 +16,15 @@ namespace PxArrange
 			DoDryRun = doDryRun;
 		}
 
-		public void Run(int slideshowIndex)
+		public void Run(int slideshowIndex, string outputDirectoryRootPath)
 		{
-			Log("MoveSlideshowImages", slideshowIndex);
+			Log(
+				$"MoveSlideshowImages: slideshow index [{slideshowIndex}] output directory root [{outputDirectoryRootPath}]"
+			);
 
 			Directory.CreateDirectory(PxPaths.SlideshowDirPath);
 
-			ReadFromFile(slideshowIndex);
+			ReadFromFile(slideshowIndex, outputDirectoryRootPath);
 		}
 
 		[Conditional("ENABLE_LOG")]
@@ -48,11 +39,13 @@ namespace PxArrange
 			Logger.Instance.Error(args);
 		}
 
-		private List<string> ReadFromFile(int slideshowIndex)
+		private List<string> ReadFromFile(int slideshowIndex, string outputDirectoryRootPath)
 		{
 			var regex = new Regex(@"\((\d+)\)");
 			var dryRunMessage = DoDryRun ? "DryRun: " : string.Empty;
 			var imagePathList = new List<string>();
+
+			var resultLogData = new ResultLogData_All() { OutputDirectoryRoot = outputDirectoryRootPath, };
 
 			var slideshowFilePath = PxPaths.SlideshowPath(slideshowIndex);
 			if (!File.Exists(slideshowFilePath))
@@ -62,10 +55,6 @@ namespace PxArrange
 			}
 
 			using var reader = new StreamReader(slideshowFilePath, Encoding.Unicode);
-			var filesMoved = 0;
-			var imagesMoved = 0;
-			var filesInvalid = 0;
-			var filesMissing = 0;
 			var directoriesVisitedSet = new HashSet<string>();
 			var filePath = string.Empty;
 
@@ -76,30 +65,34 @@ namespace PxArrange
 					continue;
 				}
 
+				++resultLogData.Files.ImagesInSlideshow;
+
 				var directoryPath = Path.GetDirectoryName(filePath);
 				if (!string.IsNullOrEmpty(directoryPath))
 				{
 					VisitDirectory(directoryPath, directoriesVisitedSet);
 				}
 
-				if (!filePath.Contains(Path.DirectorySeparatorChar))
-				{
-					//Log($"Not a file [{filePath}]");
-					continue;
-				}
-
 				if (!File.Exists(filePath))
 				{
 					Log($"File does not exist [{filePath}]");
-					++filesMissing;
+					++resultLogData.Files.NotFound;
 					continue;
 				}
+
+				//if (!filePath.Contains(Path.DirectorySeparatorChar))
+				//{
+				//	Log($"Not a file [{filePath}]");
+				//	++resultLogData.Files.Invalid;
+				//	continue;
+				//}
 
 				var fileName = Path.GetFileName(filePath);
 				var directoryIterator = Path.GetDirectoryName(filePath);
 				var artistDirectoryPath = string.Empty;
 
-				// todo: Maybe use the image id from the filename instead and check the database for the proper location?
+				// todo: Maybe check the database for the proper artist directory name using the image id from the filename instead?
+				// or maybe use the json file for the image if there is one?
 				while (directoryIterator is not null)
 				{
 					var directoryName = Path.GetFileName(directoryIterator);
@@ -115,7 +108,7 @@ namespace PxArrange
 				if (string.IsNullOrEmpty(artistDirectoryPath))
 				{
 					Error($"Couldn't find an artist directory for image file [{filePath}]");
-					++filesInvalid;
+					++resultLogData.Files.Invalid;
 					continue;
 				}
 
@@ -123,13 +116,13 @@ namespace PxArrange
 				VisitDirectory(artistDirectoryPath, directoriesVisitedSet);
 
 				var artistDirectoryName = Path.GetFileName(artistDirectoryPath);
-				var newDirectory = Path.Combine(PxPaths.AllPath, artistDirectoryName);
-				var newFilePath = Path.Combine(PxPaths.AllPath, artistDirectoryName, fileName);
+				var newDirectory = Path.Combine(outputDirectoryRootPath, artistDirectoryName);
+				var newFilePath = Path.Combine(outputDirectoryRootPath, artistDirectoryName, fileName);
 
 				var filesToMove = new Dictionary<string, string> { { filePath, newFilePath }, };
 
 				// handle image json file, ugoira zip file, ugoira js file
-				foreach (var extension in PxPaths.OtherExtensions)
+				foreach (var extension in PxPaths.OtherExtensionsWithoutDot)
 				{
 					var otherFileOldPath = Path.ChangeExtension(filePath, extension);
 					var otherFileNewPath = Path.ChangeExtension(newFilePath, extension);
@@ -156,45 +149,50 @@ namespace PxArrange
 							File.Move(oldPath, newPath, overwrite: false);
 						}
 						Log($"{dryRunMessage}Move file [{oldPath}] to [{newPath}]");
+
+						var fileExtension = Path.GetExtension(newPath);
+						if (PxPaths.ValidImageExtensions.Contains(fileExtension))
+						{
+							++resultLogData.Files.Moved.Total;
+							++resultLogData.Files.Moved.Images;
+						}
+						else if (PxPaths.OtherExtensions.Contains(fileExtension))
+						{
+							++resultLogData.Files.Moved.Total;
+							++resultLogData.Files.Moved.Other;
+						}
+						else
+						{
+							++resultLogData.Files.Skipped;
+						}
 					}
 					catch (Exception ex)
 					{
 						Error($"Failure moving file [{oldPath}] {ex}");
+						++resultLogData.Files.Errors;
 						continue;
 					}
 
-					++filesMoved;
+					//++resultLogData.Files.Moved;
 				}
 
-				++imagesMoved;
+				//++resultLogData.Files.MovedImages;
 			}
 
-			var filesTotal = filesMoved + filesMissing + filesInvalid;
-			var logObject = new
-			{
-				Files = new Dictionary<string, dynamic>()
-				{
-					{ KeySpace.Moved, filesMoved },
-					{ KeySpace.MovedImages, imagesMoved },
-					{ KeySpace.NotFound, filesMissing },
-					{ KeySpace.Invalid, filesInvalid },
-					{ KeySpace.Total, filesTotal },
-				},
-				Directories = new Dictionary<string, dynamic>()
-				{
-					{ KeySpace.Deleted, 0 },
-					{ KeySpace.SkippedNotEmpty, 0 },
-					{ KeySpace.NotFound, 0 },
-					{ KeySpace.Errors, 0 },
-					{ KeySpace.Total, directoriesVisitedSet.Count() },
-				},
-			};
+			resultLogData.Files.ComputeTotal();
+			resultLogData.Directories.Total = directoriesVisitedSet.Count();
+
 			foreach (var directoryPath in directoriesVisitedSet)
 			{
-				DeleteDirectoryIfEmpty(directoryPath, dryRunMessage, logObject.Directories);
+				DeleteDirectoryIfEmpty(directoryPath, dryRunMessage, resultLogData.Directories);
 			}
 
-			Log($"{dryRunMessage}Results {Logger.ToJsonString(logObject)}");
+			var jsonString = Logger.ToJsonString(resultLogData);
+			Log(
+				$"{dryRunMessage}Completed successfully"
+					+ $"\nOutput Directory Root Path [{outputDirectoryRootPath}]"
+					+ $"\n{jsonString}"
+			);
 
 			return imagePathList;
 		}
@@ -207,12 +205,12 @@ namespace PxArrange
 		private void DeleteDirectoryIfEmpty(
 			string directoryPath,
 			string dryRunMessage,
-			Dictionary<string, dynamic> logObject
+			ResultLogData_Directories resultLogData
 		)
 		{
 			if (!Directory.Exists(directoryPath))
 			{
-				++logObject[KeySpace.NotFound];
+				++resultLogData.NotFound;
 				return;
 			}
 
@@ -229,18 +227,76 @@ namespace PxArrange
 				catch (Exception ex)
 				{
 					Error($"Failure deleting directory [{directoryPath}] {ex}");
-					++logObject[KeySpace.Errors];
+					++resultLogData.Errors;
 					return;
 				}
 
 				Log($"{dryRunMessage}Delete directory [{directoryPath}] because it's empty");
-				++logObject[KeySpace.Deleted];
+				++resultLogData.Deleted;
 			}
 			else
 			{
 				Log($"Directory [{directoryPath}] not deleted because it's not empty");
-				++logObject[KeySpace.SkippedNotEmpty];
+				++resultLogData.Skipped;
 			}
 		}
+	}
+
+	public class ResultLogData_FilesMoved
+	{
+		public int Images { get; set; } = 0;
+		public int Other { get; set; } = 0;
+		public int Total { get; set; } = 0;
+	}
+
+	public class ResultLogData_Files
+	{
+		public ResultLogData_FilesMoved Moved { get; set; } = new();
+
+		[JsonPropertyName("Skipped (Unexpected Type)")]
+		public int Skipped { get; set; } = 0;
+
+		[JsonPropertyName("Not Found")]
+		public int NotFound { get; set; } = 0;
+
+		public int Invalid { get; set; } = 0;
+
+		public int Errors { get; set; } = 0;
+
+		// todo: Maybe have a list of the error files?
+
+		[JsonPropertyName("Images in Slideshow")]
+		public int ImagesInSlideshow { get; set; } = 0;
+
+		public int Total { get; set; } = 0;
+
+		public void ComputeTotal()
+		{
+			Total = Moved.Total + Skipped + NotFound + Invalid + Errors;
+		}
+	}
+
+	public class ResultLogData_Directories
+	{
+		public int Deleted { get; set; } = 0;
+
+		[JsonPropertyName("Skipped (Not Empty)")]
+		public int Skipped { get; set; } = 0;
+
+		[JsonPropertyName("Not Found")]
+		public int NotFound { get; set; } = 0;
+
+		public int Errors { get; set; } = 0;
+
+		// todo: Maybe have a list of the error files?
+
+		public int Total { get; set; } = 0;
+	}
+
+	public class ResultLogData_All
+	{
+		public string OutputDirectoryRoot { get; set; } = string.Empty;
+		public ResultLogData_Files Files { get; set; } = new();
+		public ResultLogData_Directories Directories { get; set; } = new();
 	}
 }

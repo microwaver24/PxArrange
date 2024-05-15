@@ -138,7 +138,7 @@ namespace PxArrange
 					if (!PxPaths.ValidImageExtensions.Contains(fileExtension))
 					{
 						// This one isn't an error. We expect it to happen.
-						if (!PxPaths.ExpectedNonImageExtensions.Contains(fileExtension))
+						if (!PxPaths.OtherExtensions.Contains(fileExtension))
 						{
 							Error($"File is an unexpected file type [{filePath}]");
 						}
