@@ -8,10 +8,19 @@ namespace PxArrange
 {
 	public class MoveSlideshowImages
 	{
-		private static readonly IComparer<string> _stringComparer = new WindowsFileExplorerCompare();
+		public static class KeySpace
+		{
+			public const string Deleted = "Deleted";
+			public const string Errors = "Errors";
+			public const string Invalid = "Invalid";
+			public const string Moved = "Moved";
+			public const string MovedImages = "Moved (Images)";
+			public const string NotFound = "Not Found";
+			public const string SkippedNotEmpty = "Skipped (Not Empty)";
+			public const string Total = "Total";
+		}
 
 		public bool DoDryRun;
-		public const int MinImagesPerSlideshow = 300;
 
 		public MoveSlideshowImages(bool doDryRun)
 		{
@@ -54,12 +63,25 @@ namespace PxArrange
 
 			using var reader = new StreamReader(slideshowFilePath, Encoding.Unicode);
 			var filesMoved = 0;
+			var imagesMoved = 0;
 			var filesInvalid = 0;
 			var filesMissing = 0;
+			var directoriesVisitedSet = new HashSet<string>();
 			var filePath = string.Empty;
 
 			while ((filePath = reader.ReadLine()) != null)
 			{
+				if (string.IsNullOrWhiteSpace(filePath))
+				{
+					continue;
+				}
+
+				var directoryPath = Path.GetDirectoryName(filePath);
+				if (!string.IsNullOrEmpty(directoryPath))
+				{
+					VisitDirectory(directoryPath, directoriesVisitedSet);
+				}
+
 				if (!filePath.Contains(Path.DirectorySeparatorChar))
 				{
 					//Log($"Not a file [{filePath}]");
@@ -92,39 +114,133 @@ namespace PxArrange
 
 				if (string.IsNullOrEmpty(artistDirectoryPath))
 				{
-					Error($"Couldn't find an artist folder for image file [{filePath}]");
+					Error($"Couldn't find an artist directory for image file [{filePath}]");
 					++filesInvalid;
 					continue;
 				}
 
+				// If an image is in a subdirectory, then directoryPath and artistDirectoryPath might be different.
+				VisitDirectory(artistDirectoryPath, directoriesVisitedSet);
+
 				var artistDirectoryName = Path.GetFileName(artistDirectoryPath);
+				var newDirectory = Path.Combine(PxPaths.AllPath, artistDirectoryName);
 				var newFilePath = Path.Combine(PxPaths.AllPath, artistDirectoryName, fileName);
 
-				Log($"{dryRunMessage}Move image file [{filePath}] to [{newFilePath}]");
+				var filesToMove = new Dictionary<string, string> { { filePath, newFilePath }, };
 
-				// todo: also move zip files and json files
-
-				if (!DoDryRun)
+				// handle image json file, ugoira zip file, ugoira js file
+				foreach (var extension in PxPaths.OtherExtensions)
 				{
+					var otherFileOldPath = Path.ChangeExtension(filePath, extension);
+					var otherFileNewPath = Path.ChangeExtension(newFilePath, extension);
+					if (File.Exists(otherFileOldPath))
+					{
+						filesToMove.Add(otherFileOldPath, otherFileNewPath);
+					}
+				}
+
+				foreach (var kvp in filesToMove)
+				{
+					var oldPath = kvp.Key;
+					var newPath = kvp.Value;
+
 					try
 					{
-						File.Move(filePath, newFilePath, overwrite: false);
+						if (!DoDryRun)
+						{
+							if (!Directory.Exists(newDirectory))
+							{
+								Directory.CreateDirectory(newDirectory);
+							}
+
+							File.Move(oldPath, newPath, overwrite: false);
+						}
+						Log($"{dryRunMessage}Move file [{oldPath}] to [{newPath}]");
 					}
 					catch (Exception ex)
 					{
-						Error($"Failure moving file [{filePath}] {ex}");
+						Error($"Failure moving file [{oldPath}] {ex}");
 						continue;
 					}
+
+					++filesMoved;
 				}
-				++filesMoved;
+
+				++imagesMoved;
 			}
 
 			var filesTotal = filesMoved + filesMissing + filesInvalid;
-			Log(
-				$"{dryRunMessage}Files moved [{filesMoved}] missing [{filesMissing}] invalid [{filesInvalid}] total [{filesTotal}]"
-			);
+			var logObject = new
+			{
+				Files = new Dictionary<string, dynamic>()
+				{
+					{ KeySpace.Moved, filesMoved },
+					{ KeySpace.MovedImages, imagesMoved },
+					{ KeySpace.NotFound, filesMissing },
+					{ KeySpace.Invalid, filesInvalid },
+					{ KeySpace.Total, filesTotal },
+				},
+				Directories = new Dictionary<string, dynamic>()
+				{
+					{ KeySpace.Deleted, 0 },
+					{ KeySpace.SkippedNotEmpty, 0 },
+					{ KeySpace.NotFound, 0 },
+					{ KeySpace.Errors, 0 },
+					{ KeySpace.Total, directoriesVisitedSet.Count() },
+				},
+			};
+			foreach (var directoryPath in directoriesVisitedSet)
+			{
+				DeleteDirectoryIfEmpty(directoryPath, dryRunMessage, logObject.Directories);
+			}
+
+			Log($"{dryRunMessage}Results {Logger.ToJsonString(logObject)}");
 
 			return imagePathList;
+		}
+
+		private void VisitDirectory(string directoryPath, HashSet<string> directoriesVisitedSet)
+		{
+			directoriesVisitedSet.Add(directoryPath);
+		}
+
+		private void DeleteDirectoryIfEmpty(
+			string directoryPath,
+			string dryRunMessage,
+			Dictionary<string, dynamic> logObject
+		)
+		{
+			if (!Directory.Exists(directoryPath))
+			{
+				++logObject[KeySpace.NotFound];
+				return;
+			}
+
+			var remainingFiles = Directory.EnumerateFiles(directoryPath);
+			if (remainingFiles.Count() <= 0)
+			{
+				try
+				{
+					if (!DoDryRun)
+					{
+						Directory.Delete(directoryPath, true);
+					}
+				}
+				catch (Exception ex)
+				{
+					Error($"Failure deleting directory [{directoryPath}] {ex}");
+					++logObject[KeySpace.Errors];
+					return;
+				}
+
+				Log($"{dryRunMessage}Delete directory [{directoryPath}] because it's empty");
+				++logObject[KeySpace.Deleted];
+			}
+			else
+			{
+				Log($"Directory [{directoryPath}] not deleted because it's not empty");
+				++logObject[KeySpace.SkippedNotEmpty];
+			}
 		}
 	}
 }

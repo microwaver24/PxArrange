@@ -20,6 +20,7 @@ namespace PxArrange
 		private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions()
 		{
 			WriteIndented = true,
+			AllowTrailingCommas = true,
 		};
 
 		public Logger()
@@ -94,12 +95,16 @@ namespace PxArrange
 				}
 				else
 				{
-					var json = JsonSerializer.Serialize(arg, _jsonOptions);
-					sb.Append(json.ToString());
+					sb.Append(ToJsonString(arg));
 				}
 			}
 
 			return sb;
+		}
+
+		public static string ToJsonString(object obj)
+		{
+			return JsonSerializer.Serialize(obj, _jsonOptions);
 		}
 	}
 }

@@ -62,6 +62,8 @@ namespace PxArrange
 			".webp",
 		};
 
+		public static readonly string[] OtherExtensions = ["zip", "json", "zip.js",];
+
 		public static readonly HashSet<string> ExpectedNonImageExtensions = new HashSet<string> { ".zip", };
 	}
 }
