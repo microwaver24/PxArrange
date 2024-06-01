@@ -4,27 +4,59 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using ManyConsole;
 
 namespace PxArrange
 {
-	public class MoveSlideshowImages
+	public class MoveSlideshowImages : ConsoleCommand
 	{
 		public bool DoDryRun;
+		private int _slideshowIndex;
+		private static readonly string _outputDirectoryRootPath_Default = PxPaths.AllPath;
+		private string _outputDirectoryRootPath;
 
-		public MoveSlideshowImages(bool doDryRun)
+		public MoveSlideshowImages()
 		{
-			DoDryRun = doDryRun;
+			DoDryRun = true;
+			_slideshowIndex = 0;
+			_outputDirectoryRootPath = _outputDirectoryRootPath_Default;
+
+			IsCommand("MoveSlideshow", "Move the images of a slideshow to a new folder.");
+			HasLongDescription("Take the images in a slideshow in the fresh folder and move them to the all folder.");
+
+			HasOption("d|dry-run", "Do a dry run to see what will be changed.", b => DoDryRun = b != null);
+
+			HasOption(
+				"i|index=",
+				"Index of the slideshow to move, starting at 0.",
+				s => _slideshowIndex = int.Parse(s)
+			);
+
+			HasOption(
+				"o|output-path=",
+				$"Root directory to move the images to. Default is [{_outputDirectoryRootPath_Default}]",
+				s => _outputDirectoryRootPath = s ?? _outputDirectoryRootPath_Default
+			);
+
+			if (_slideshowIndex < 0)
+			{
+				throw new Exception($"Argument 'index' must be >= 0");
+			}
+
+			// Maybe validate _outputDirectoryRootPath?
 		}
 
-		public void Run(int slideshowIndex, string outputDirectoryRootPath)
+		public override int Run(string[] remainingArguments)
 		{
 			Log(
-				$"MoveSlideshowImages: slideshow index [{slideshowIndex}] output directory root [{outputDirectoryRootPath}]"
+				$"MoveSlideshowImages: slideshow index [{_slideshowIndex}] output directory root [{_outputDirectoryRootPath}]"
 			);
 
 			Directory.CreateDirectory(PxPaths.SlideshowDirPath);
 
-			ReadFromFile(slideshowIndex, outputDirectoryRootPath);
+			ReadFromFile();
+
+			return Program.Success;
 		}
 
 		[Conditional("ENABLE_LOG")]
@@ -39,18 +71,18 @@ namespace PxArrange
 			Logger.Instance.Error(args);
 		}
 
-		private List<string> ReadFromFile(int slideshowIndex, string outputDirectoryRootPath)
+		private List<string> ReadFromFile()
 		{
 			var regex = new Regex(@"\((\d+)\)");
 			var dryRunMessage = DoDryRun ? "DryRun: " : string.Empty;
 			var imagePathList = new List<string>();
 
-			var resultLogData = new ResultLogData_All() { OutputDirectoryRoot = outputDirectoryRootPath, };
+			var resultLogData = new ResultLogData_All() { OutputDirectoryRoot = _outputDirectoryRootPath, };
 
-			var slideshowFilePath = PxPaths.SlideshowPath(slideshowIndex);
+			var slideshowFilePath = PxPaths.SlideshowPath(_slideshowIndex);
 			if (!File.Exists(slideshowFilePath))
 			{
-				Error($"Slideshow for index [{slideshowIndex}] file does not exist [{slideshowFilePath}]");
+				Error($"Slideshow for index [{_slideshowIndex}] file does not exist [{slideshowFilePath}]");
 				return imagePathList;
 			}
 
@@ -116,8 +148,8 @@ namespace PxArrange
 				VisitDirectory(artistDirectoryPath, directoriesVisitedSet);
 
 				var artistDirectoryName = Path.GetFileName(artistDirectoryPath);
-				var newDirectory = Path.Combine(outputDirectoryRootPath, artistDirectoryName);
-				var newFilePath = Path.Combine(outputDirectoryRootPath, artistDirectoryName, fileName);
+				var newDirectory = Path.Combine(_outputDirectoryRootPath, artistDirectoryName);
+				var newFilePath = Path.Combine(_outputDirectoryRootPath, artistDirectoryName, fileName);
 
 				var filesToMove = new Dictionary<string, string> { { filePath, newFilePath }, };
 
@@ -190,7 +222,7 @@ namespace PxArrange
 			var jsonString = Logger.ToJsonString(resultLogData);
 			Log(
 				$"{dryRunMessage}Completed successfully"
-					+ $"\nOutput Directory Root Path [{outputDirectoryRootPath}]"
+					+ $"\nOutput Directory Root Path [{_outputDirectoryRootPath}]"
 					+ $"\n{jsonString}"
 			);
 

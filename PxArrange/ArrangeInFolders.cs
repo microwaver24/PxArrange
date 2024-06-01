@@ -2,21 +2,28 @@
 
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using ManyConsole;
 
 namespace PxArrange
 {
-	public class ArrangeInFolders
+	public class ArrangeInFolders : ConsoleCommand
 	{
 		public bool DoDryRun;
-		private int _imageIdOrdinal = -1;
-		private int _memberIdOrdinal = -1;
 
-		public ArrangeInFolders(bool doDryRun)
+		//private int _imageIdOrdinal = -1;
+		//private int _memberIdOrdinal = -1;
+
+		public ArrangeInFolders()
 		{
-			DoDryRun = doDryRun;
+			DoDryRun = true;
+
+			IsCommand("Organize", "Arrange image files into folders.");
+			HasLongDescription("Arrange image files into the correct artist folders using the database as a guide.");
+
+			HasOption("d|dry-run", "Do a dry run to see what will be changed.", b => DoDryRun = b != null);
 		}
 
-		public void Run()
+		public override int Run(string[] remainingArguments)
 		{
 			var badFiles = GetBadFiles();
 			//Log("badFiles", badFiles);
@@ -55,6 +62,8 @@ namespace PxArrange
 					badFiles.Remove(imageId);
 				}
 			}
+
+			return Program.Success;
 		}
 
 		[Conditional("ENABLE_LOG")]

@@ -1,32 +1,36 @@
 namespace PxArrange
 {
-	// todo: allow all of these to be set from a command line arg or settings file.
 	public static class PxPaths
 	{
-		public static readonly string PxRootPath = Path.Combine(@"D:", "H", "Px");
+		//public static string PixivPath => ConfigFile.Instance.ImagesRootPath;
 
-		public static readonly string PixivPath = Path.Combine(PxRootPath, "pixiv");
+		//public static string BadPath => Path.Combine(PixivPath, ConfigFile.Instance.ImagesSubdirectories.Bad);
 
-		public static readonly string BinPath = Path.Combine(PxRootPath, "bin");
+		//public static string FreshPath => Path.Combine(PixivPath, ConfigFile.Instance.ImagesSubdirectories.Fresh);
 
-		public static readonly string BadPath = Path.Combine(PixivPath, "bad");
+		//public static string AllPath => Path.Combine(PixivPath, ConfigFile.Instance.ImagesSubdirectories.All);
 
-		public static readonly string FreshPath = Path.Combine(PixivPath, "fresh");
+		//public static string SlideshowDirPath => Path.Combine(PixivPath, ConfigFile.Instance.ImagesSubdirectories.Slideshow);
 
-		public static readonly string AllPath = Path.Combine(PixivPath, "all");
-
-		public static readonly string SlideshowDirPath = Path.Combine(PixivPath, "slideshow");
+		public static readonly string PixivPath = ConfigFile.Instance.ImagesRootPath;
+		public static readonly string BadPath = Path.Combine(PixivPath, ConfigFile.Instance.ImagesSubdirectories.Bad);
+		public static readonly string FreshPath = Path.Combine(
+			PixivPath,
+			ConfigFile.Instance.ImagesSubdirectories.Fresh
+		);
+		public static readonly string AllPath = Path.Combine(PixivPath, ConfigFile.Instance.ImagesSubdirectories.All);
+		public static readonly string SlideshowDirPath = Path.Combine(
+			PixivPath,
+			ConfigFile.Instance.ImagesSubdirectories.Slideshow
+		);
 
 		/// <summary>
 		/// Folders listed here contain folder that are artist names.
 		/// </summary>
 		public static readonly string[] ArtistPaths = new string[] { FreshPath, AllPath };
-
-		public static readonly string DatabasePath = Path.Combine(BinPath, "pixivutil20230105", DbFileName);
-
+		public static readonly string DatabasePath = Path.Combine(ConfigFile.Instance.PixivUtil2RootPath, DbFileName);
 		public static readonly string IniFilePath = Path.Combine(
-			BinPath,
-			"IrfanViewPortable",
+			ConfigFile.Instance.IrfanViewRootPath,
 			"Data",
 			"IrfanView",
 			IniFileName
@@ -36,6 +40,7 @@ namespace PxArrange
 		public const string IniFileName = "i_view32.ini";
 		public const string SlideshowFileNamePattern = "slideshow{0:D3}.txt";
 		public const string SlideshowFileNamePatternWithCount = "slideshow{0:D3}_{1:D}.txt";
+		public const string ConfigFileName = "config.json";
 
 		public static string SlideshowPath(int index, int? imageCount = null)
 		{

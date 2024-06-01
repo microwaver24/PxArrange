@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "PxArrange": {
+      "commandName": "Project"
+    },
+    "MoveSlideshow": {
+      "commandName": "Project",
+      "commandLineArgs": "MoveSlideshow --index=5"
+    }
+  }
+}

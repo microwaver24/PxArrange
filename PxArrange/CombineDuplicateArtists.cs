@@ -1,7 +1,6 @@
 #define ENABLE_LOG
 
 using System.Diagnostics;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 
@@ -9,11 +8,6 @@ namespace PxArrange
 {
 	public class CombineDuplicateArtists
 	{
-		private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions()
-		{
-			WriteIndented = true,
-		};
-
 		public bool DoDryRun;
 
 		public CombineDuplicateArtists(bool doDryRun)
