@@ -2,7 +2,6 @@
 
 using System.Diagnostics;
 using System.Text.RegularExpressions;
-using Microsoft.Data.Sqlite;
 
 namespace PxArrange
 {
@@ -70,111 +69,113 @@ namespace PxArrange
 			Logger.Instance.Error(args);
 		}
 
+		/*
 		private void DatabaseStuff(
-			Dictionary<int, List<string>> badFiles,
-			Dictionary<int, List<string>> targetDirectories
+		    Dictionary<int, List<string>> badFiles,
+		    Dictionary<int, List<string>> targetDirectories
 		)
 		{
-			var connectionStringBuilder = new SqliteConnectionStringBuilder()
-			{
-				DataSource = PxPaths.DatabasePath,
-				Mode = SqliteOpenMode.ReadWriteCreate,
-			};
-			string connectionString = connectionStringBuilder.ToString();
-			using var connection = new SqliteConnection(connectionString);
-			var filesMoved = 0;
+		    var connectionStringBuilder = new SqliteConnectionStringBuilder()
+		    {
+		        DataSource = PxPaths.DatabasePath,
+		        Mode = SqliteOpenMode.ReadWriteCreate,
+		    };
+		    string connectionString = connectionStringBuilder.ToString();
+		    using var connection = new SqliteConnection(connectionString);
+		    var filesMoved = 0;
 
-			try
-			{
-				connection.Open();
-				using var command = new SqliteCommand()
-				{
-					Connection = connection,
-					CommandText = "SELECT * FROM pixiv_master_image",
-				};
+		    try
+		    {
+		        connection.Open();
+		        using var command = new SqliteCommand()
+		        {
+		            Connection = connection,
+		            CommandText = "SELECT * FROM pixiv_master_image",
+		        };
 
-				using var dbReader = command.ExecuteReader();
+		        using var dbReader = command.ExecuteReader();
 
-				_imageIdOrdinal = dbReader.GetOrdinal(ImageTable.ColumnNames.ImageId);
-				_memberIdOrdinal = dbReader.GetOrdinal(ImageTable.ColumnNames.MemberId);
+		        _imageIdOrdinal = dbReader.GetOrdinal(ImageTable.ColumnNames.ImageId);
+		        _memberIdOrdinal = dbReader.GetOrdinal(ImageTable.ColumnNames.MemberId);
 
-				while (dbReader.Read())
-				{
-					ProcessRow(dbReader, badFiles, targetDirectories, ref filesMoved);
-				}
-			}
-			finally
-			{
-				connection.Close();
-			}
+		        while (dbReader.Read())
+		        {
+		            ProcessRow(dbReader, badFiles, targetDirectories, ref filesMoved);
+		        }
+		    }
+		    finally
+		    {
+		        connection.Close();
+		    }
 
-			Log($"Files Moved:", filesMoved);
+		    Log($"Files Moved:", filesMoved);
 		}
 
 		private void ProcessRow(
-			SqliteDataReader dbReader,
-			Dictionary<int, List<string>> badFiles,
-			Dictionary<int, List<string>> targetDirectories,
-			ref int filesMoved
+		    SqliteDataReader dbReader,
+		    Dictionary<int, List<string>> badFiles,
+		    Dictionary<int, List<string>> targetDirectories,
+		    ref int filesMoved
 		)
 		{
-			var imageId = dbReader.GetInt32(_imageIdOrdinal);
-			var memberId = dbReader.GetInt32(_memberIdOrdinal);
+		    var imageId = dbReader.GetInt32(_imageIdOrdinal);
+		    var memberId = dbReader.GetInt32(_memberIdOrdinal);
 
-			if (badFiles.ContainsKey(imageId) && targetDirectories.ContainsKey(memberId))
-			{
-				foreach (var filePath in badFiles[imageId])
-				{
-					var fileName = Path.GetFileName(filePath);
-					var outputDirectoryPath = targetDirectories[memberId][0];
-					var outputFilePath = Path.Combine(outputDirectoryPath, fileName);
+		    if (badFiles.ContainsKey(imageId) && targetDirectories.ContainsKey(memberId))
+		    {
+		        foreach (var filePath in badFiles[imageId])
+		        {
+		            var fileName = Path.GetFileName(filePath);
+		            var outputDirectoryPath = targetDirectories[memberId][0];
+		            var outputFilePath = Path.Combine(outputDirectoryPath, fileName);
 
-					var dryRunMessage = DoDryRun ? "DryRun: " : string.Empty;
-					Log($"{dryRunMessage}Move [{filePath}] to [{outputFilePath}]");
+		            var dryRunMessage = DoDryRun ? "DryRun: " : string.Empty;
+		            Log($"{dryRunMessage}Move [{filePath}] to [{outputFilePath}]");
 
-					if (!DoDryRun)
-					{
-						File.Move(filePath, outputFilePath);
-					}
+		            if (!DoDryRun)
+		            {
+		                File.Move(filePath, outputFilePath);
+		            }
 
-					++filesMoved;
-				}
-				badFiles.Remove(imageId);
-			}
+		            ++filesMoved;
+		        }
+		        badFiles.Remove(imageId);
+		    }
 		}
 
 		private void ProcessRow(
-			ImageTableReader tableReader,
-			SqliteDataReader dbReader,
-			Dictionary<int, List<string>> badFiles,
-			Dictionary<int, List<string>> targetDirectories,
-			ref int filesMoved
+		    ImageTableReader tableReader,
+		    SqliteDataReader dbReader,
+		    Dictionary<int, List<string>> badFiles,
+		    Dictionary<int, List<string>> targetDirectories,
+		    ref int filesMoved
 		)
 		{
-			var imageId = dbReader.GetInt32(_imageIdOrdinal);
-			var memberId = dbReader.GetInt32(_memberIdOrdinal);
+		    var imageId = dbReader.GetInt32(_imageIdOrdinal);
+		    var memberId = dbReader.GetInt32(_memberIdOrdinal);
 
-			if (badFiles.ContainsKey(imageId) && targetDirectories.ContainsKey(memberId))
-			{
-				foreach (var filePath in badFiles[imageId])
-				{
-					var fileName = Path.GetFileName(filePath);
-					var outputDirectoryPath = targetDirectories[memberId][0];
-					var outputFilePath = Path.Combine(outputDirectoryPath, fileName);
+		    if (badFiles.ContainsKey(imageId) && targetDirectories.ContainsKey(memberId))
+		    {
+		        foreach (var filePath in badFiles[imageId])
+		        {
+		            var fileName = Path.GetFileName(filePath);
+		            var outputDirectoryPath = targetDirectories[memberId][0];
+		            var outputFilePath = Path.Combine(outputDirectoryPath, fileName);
 
-					var dryRunMessage = DoDryRun ? "DryRun: " : string.Empty;
-					Log($"{dryRunMessage}Move [{filePath}] to [{outputFilePath}]");
+		            var dryRunMessage = DoDryRun ? "DryRun: " : string.Empty;
+		            Log($"{dryRunMessage}Move [{filePath}] to [{outputFilePath}]");
 
-					if (!DoDryRun)
-					{
-						File.Move(filePath, outputFilePath);
-					}
+		            if (!DoDryRun)
+		            {
+		                File.Move(filePath, outputFilePath);
+		            }
 
-					++filesMoved;
-				}
-				badFiles.Remove(imageId);
-			}
+		            ++filesMoved;
+		        }
+		        badFiles.Remove(imageId);
+		    }
 		}
+		*/
 
 		private Dictionary<int, List<string>> GetBadFiles()
 		{
