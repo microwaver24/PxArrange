@@ -3,22 +3,50 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
+using ManyConsole;
 
 namespace PxArrange
 {
-	public class MakeSlideshows
+	public class MakeSlideshows : ConsoleCommand
 	{
 		private static readonly IComparer<string> _stringComparer = new WindowsFileExplorerCompare();
 
 		public bool DoDryRun;
-		public const int MinImagesPerSlideshow = 300;
+		public readonly int MinImagesPerSlideshow;
 
-		public MakeSlideshows(bool doDryRun)
+		public MakeSlideshows()
 		{
-			DoDryRun = doDryRun;
+			DoDryRun = true;
+
+			IsCommand("MakeSlideshows", "Make slideshows of all the fresh images.");
+			HasLongDescription(
+				"Gather all the images in the fresh folder and make slideshows. Each slideshow has a goal number of images that should be in it."
+			);
+
+			HasOption("d|dry-run", "Do a dry run to see what will be changed.", b => DoDryRun = b != null);
+
+			var slideshowImageCount = ConfigFile.Instance.SlideshowImageCount;
+			HasOption(
+				"i|imageCount:",
+				"Index of the slideshow to move, starting at 0.",
+				s =>
+				{
+					var didParse = int.TryParse(s, out slideshowImageCount);
+					if (!didParse)
+					{
+						slideshowImageCount = ConfigFile.Instance.SlideshowImageCount;
+					}
+				}
+			);
+			MinImagesPerSlideshow = slideshowImageCount;
+
+			if (MinImagesPerSlideshow < 1)
+			{
+				throw new ArgumentOutOfRangeException("imageCount", MinImagesPerSlideshow, $"Argument cannot be < 1.");
+			}
 		}
 
-		public void Run()
+		public override int Run(string[] remainingArguments)
 		{
 			var targetDirectories = GetTargetDirectories(PxPaths.FreshPath);
 			//Log("targetDirectories", targetDirectories);
@@ -39,6 +67,8 @@ namespace PxArrange
 			}
 
 			FindFiles(targetDirectories);
+
+			return Program.Success;
 		}
 
 		[Conditional("ENABLE_LOG")]

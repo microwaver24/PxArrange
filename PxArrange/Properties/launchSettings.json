@@ -6,6 +6,10 @@
     "MoveSlideshow": {
       "commandName": "Project",
       "commandLineArgs": "MoveSlideshow --index=5"
+    },
+    "MakeSlideshows": {
+      "commandName": "Project",
+      "commandLineArgs": "MakeSlideshows"
     }
   }
 }
