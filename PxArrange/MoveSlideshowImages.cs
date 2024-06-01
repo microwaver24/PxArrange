@@ -24,7 +24,11 @@ namespace PxArrange
 			IsCommand("MoveSlideshow", "Move the images of a slideshow to a new folder.");
 			HasLongDescription("Take the images in a slideshow in the fresh folder and move them to the all folder.");
 
-			HasOption("d|dry-run", "Do a dry run to see what will be changed.", b => DoDryRun = b != null);
+			HasOption(
+				"d|dry-run:",
+				"Do a dry run to see what will be changed.",
+				b => DoDryRun = b == null ? true : bool.Parse(b)
+			);
 
 			HasOption(
 				"i|index=",
@@ -156,6 +160,7 @@ namespace PxArrange
 				// handle image json file, ugoira zip file, ugoira js file
 				foreach (var extension in PxPaths.OtherExtensionsWithoutDot)
 				{
+					// todo: Parse image id from path, look for all other images with matching id. It looks like the json file has a pageNumber = imageCount-1 instead of p0.
 					var otherFileOldPath = Path.ChangeExtension(filePath, extension);
 					var otherFileNewPath = Path.ChangeExtension(newFilePath, extension);
 					if (File.Exists(otherFileOldPath))

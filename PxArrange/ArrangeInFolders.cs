@@ -20,7 +20,11 @@ namespace PxArrange
 			IsCommand("Organize", "Arrange image files into folders.");
 			HasLongDescription("Arrange image files into the correct artist folders using the database as a guide.");
 
-			HasOption("d|dry-run", "Do a dry run to see what will be changed.", b => DoDryRun = b != null);
+			HasOption(
+				"d|dry-run:",
+				"Do a dry run to see what will be changed.",
+				b => DoDryRun = b == null ? true : bool.Parse(b)
+			);
 		}
 
 		public override int Run(string[] remainingArguments)
