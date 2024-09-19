@@ -240,6 +240,41 @@ namespace PxArrange
 				++resultLogData.Skipped;
 			}
 		}
+
+		//private void UpdateDatabase()
+		//{
+		//	var imageTable = new ImageTable();
+		//	imageTable.Run("SELECT * FROM pixiv_master_image", ProcessRow);
+
+		//	void ProcessRow(ImageTableReader tableReader)
+		//	{
+		//		var imageId = tableReader.ImageId;
+		//		var memberId = tableReader.MemberId;
+
+		//		tableReader.SaveName =
+
+		//		if (badFiles.ContainsKey(imageId) && targetDirectories.ContainsKey(memberId))
+		//		{
+		//			foreach (var filePath in badFiles[imageId])
+		//			{
+		//				var fileName = Path.GetFileName(filePath);
+		//				var outputDirectoryPath = targetDirectories[memberId][0];
+		//				var outputFilePath = Path.Combine(outputDirectoryPath, fileName);
+
+		//				var dryRunMessage = DoDryRun ? "DryRun: " : string.Empty;
+		//				Log($"{dryRunMessage}Move [{filePath}] to [{outputFilePath}]");
+
+		//				if (!DoDryRun)
+		//				{
+		//					File.Move(filePath, outputFilePath);
+		//				}
+
+		//				//++filesMoved;
+		//			}
+		//			badFiles.Remove(imageId);
+		//		}
+		//	}
+		//}
 	}
 
 	public class ResultLogData_FilesMoved
