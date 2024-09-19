@@ -1,7 +1,6 @@
 #define ENABLE_LOG
 
 using System.Diagnostics;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 
@@ -9,14 +8,19 @@ namespace PxArrange
 {
 	public class ArrangeInFolders
 	{
+		private static class ColumnNames
+		{
+			public const string ImageId = "image_id";
+			public const string MemberId = "member_id";
+		}
+
 		private const string _badPath = @"D:\H\Px\pixiv\bad";
 		private const string _freshPath = @"D:\H\Px\pixiv\fresh";
 		private const string _databasePath = @"D:\H\Px\bin\pixivutil20230105\db.sqlite";
-		private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions()
-		{
-			WriteIndented = true,
-		};
+
 		public bool DoDryRun;
+		private int _imageIdOrdinal = -1;
+		private int _memberIdOrdinal = -1;
 
 		public ArrangeInFolders(bool doDryRun)
 		{
@@ -70,34 +74,13 @@ namespace PxArrange
 				};
 
 				using var dbReader = command.ExecuteReader();
-				var imageIdOrdinal = dbReader.GetOrdinal("image_id");
-				var memberIdOrdinal = dbReader.GetOrdinal("member_id");
+
+				_imageIdOrdinal = dbReader.GetOrdinal(ColumnNames.ImageId);
+				_memberIdOrdinal = dbReader.GetOrdinal(ColumnNames.MemberId);
 
 				while (dbReader.Read())
 				{
-					var imageId = dbReader.GetInt32(imageIdOrdinal);
-					var memberId = dbReader.GetInt32(memberIdOrdinal);
-
-					if (badFiles.ContainsKey(imageId) && targetDirectories.ContainsKey(memberId))
-					{
-						foreach (var filePath in badFiles[imageId])
-						{
-							var fileName = Path.GetFileName(filePath);
-							var outputDirectoryPath = targetDirectories[memberId][0];
-							var outputFilePath = Path.Combine(outputDirectoryPath, fileName);
-
-							var dryRunMessage = DoDryRun ? "DryRun: " : string.Empty;
-							Log($"{dryRunMessage}Move [{filePath}] to [{outputFilePath}]");
-
-							if (!DoDryRun)
-							{
-								File.Move(filePath, outputFilePath);
-							}
-
-							++filesMoved;
-						}
-						badFiles.Remove(imageId);
-					}
+					ProcessRow(dbReader, badFiles, targetDirectories, ref filesMoved);
 				}
 			}
 			finally
@@ -106,6 +89,38 @@ namespace PxArrange
 			}
 
 			Log($"Files Moved:", filesMoved);
+		}
+
+		private void ProcessRow(
+			SqliteDataReader dbReader,
+			Dictionary<int, List<string>> badFiles,
+			Dictionary<int, List<string>> targetDirectories,
+			ref int filesMoved
+		)
+		{
+			var imageId = dbReader.GetInt32(_imageIdOrdinal);
+			var memberId = dbReader.GetInt32(_memberIdOrdinal);
+
+			if (badFiles.ContainsKey(imageId) && targetDirectories.ContainsKey(memberId))
+			{
+				foreach (var filePath in badFiles[imageId])
+				{
+					var fileName = Path.GetFileName(filePath);
+					var outputDirectoryPath = targetDirectories[memberId][0];
+					var outputFilePath = Path.Combine(outputDirectoryPath, fileName);
+
+					var dryRunMessage = DoDryRun ? "DryRun: " : string.Empty;
+					Log($"{dryRunMessage}Move [{filePath}] to [{outputFilePath}]");
+
+					if (!DoDryRun)
+					{
+						File.Move(filePath, outputFilePath);
+					}
+
+					++filesMoved;
+				}
+				badFiles.Remove(imageId);
+			}
 		}
 
 		private Dictionary<int, List<string>> GetBadFiles()
