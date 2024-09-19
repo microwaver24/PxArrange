@@ -13,7 +13,7 @@
 			//makeSlideshows.Run();
 
 			var moveSlideshowImages = new MoveSlideshowImages(doDryRun: true);
-			moveSlideshowImages.Run(slideshowIndex: 0);
+			moveSlideshowImages.Run(slideshowIndex: 0, outputDirectoryRootPath: PxPaths.AllPath);
 
 			Log("end");
 		}
