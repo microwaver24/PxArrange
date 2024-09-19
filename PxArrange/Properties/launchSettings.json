@@ -5,11 +5,15 @@
     },
     "MoveSlideshow": {
       "commandName": "Project",
-      "commandLineArgs": "MoveSlideshow --index=0 --dry-run=true"
+      "commandLineArgs": "MoveSlideshow --index=2 --dry-run=true"
     },
     "MakeSlideshows": {
       "commandName": "Project",
       "commandLineArgs": "MakeSlideshows --dry-run=true"
+    },
+    "CombineDuplicateArtists": {
+      "commandName": "Project",
+      "commandLineArgs": "CombineDuplicateArtists --dry-run=true"
     }
   }
 }

@@ -2,20 +2,32 @@
 
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using ManyConsole;
 using Microsoft.Data.Sqlite;
 
 namespace PxArrange
 {
-	public class CombineDuplicateArtists
+	public class CombineDuplicateArtists : ConsoleCommand
 	{
 		public bool DoDryRun;
 
-		public CombineDuplicateArtists(bool doDryRun)
+		public CombineDuplicateArtists()
 		{
-			DoDryRun = doDryRun;
+			DoDryRun = true;
+
+			IsCommand("CombineDuplicateArtists", "Find artists with the same artist ID and combine all their folders.");
+			//HasLongDescription(
+			//	""
+			//);
+
+			HasOption(
+				"d|dry-run:",
+				"Do a dry run to see what will be changed.",
+				b => DoDryRun = b == null ? true : bool.Parse(b)
+			);
 		}
 
-		public void Run()
+		public override int Run(string[] remainingArguments)
 		{
 			foreach (var rootDirPath in PxPaths.ArtistPaths)
 			{
@@ -31,6 +43,8 @@ namespace PxArrange
 
 				DatabaseStuff(targetDirectories);
 			}
+
+			return Program.Success;
 		}
 
 		[Conditional("ENABLE_LOG")]
