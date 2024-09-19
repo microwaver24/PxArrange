@@ -1,0 +1,14 @@
+{
+	"ImagesRootPath": "%temp%\\PxArrangeTests",
+	"ImagesSubdirectories": {
+		"All": "all",
+		"Bad": "bad",
+		"Fresh": "fresh",
+		"Slideshow": "slideshow"
+	},
+	"IrfanViewRootPath": "D:\\H\\Px\\bin\\IrfanViewPortable\\",
+	"PixivUtil2RootPath": "D:\\H\\Px\\bin\\PixivUtil2\\",
+	"SlideshowImageCount": 300,
+	"WriteToConsole": true,
+	"WriteToLogFile": true
+}
