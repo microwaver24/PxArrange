@@ -111,7 +111,7 @@ namespace PxArrange
 				);
 			}
 
-			ProcessPotentiallyOrphanedFiles(
+			ProcessPotentiallyOrphanedFiles2(
 				imageIdToArtistDirectory,
 				potentiallyOrphanedFiles,
 				filesToMoveSrcDst,
@@ -165,16 +165,7 @@ namespace PxArrange
 				return;
 			}
 
-			var fileName = Path.GetFileName(filePath);
-			var matchImageId = regexForImageId.Match(fileName);
-			if (!matchImageId.Success)
-			{
-				Error($"Didn't find ImageId at start of name of file [{filePath}]");
-				++resultLogData.Files.Invalid;
-				return;
-			}
-
-			var imageIdString = matchImageId.Groups[1].Value;
+			var imageIdString = GetImageIdFromPath(filePath, resultLogData);
 			var imageIdIsValid = int.TryParse(imageIdString, out int imageId);
 			if (!imageIdIsValid)
 			{
@@ -255,6 +246,20 @@ namespace PxArrange
 			}
 		}
 
+		private string GetImageIdFromPath(string filePath, ResultLogData_All resultLogData)
+		{
+			var fileName = Path.GetFileName(filePath);
+			var matchImageId = regexForImageId.Match(fileName);
+			if (!matchImageId.Success)
+			{
+				Error($"Didn't find ImageId at start of name of file [{filePath}]");
+				++resultLogData.Files.Invalid;
+				return string.Empty;
+			}
+
+			return matchImageId.Groups[1].Value;
+		}
+
 		private void ProcessPotentiallyOrphanedFiles(
 			Dictionary<string, string> imageIdToArtistDirectory,
 			Dictionary<string, OrphanedFileList> potentiallyOrphanedFiles,
@@ -284,6 +289,80 @@ namespace PxArrange
 					}
 				}
 			}
+		}
+
+		private void ProcessPotentiallyOrphanedFiles2(
+			Dictionary<string, string> imageIdToArtistDirectory,
+			Dictionary<string, OrphanedFileList> potentiallyOrphanedFiles,
+			Dictionary<string, string> filesToMoveSrcDst,
+			string dryRunMessage,
+			ResultLogData_All resultLogData
+		)
+		{
+			foreach (var pair in potentiallyOrphanedFiles)
+			{
+				var imageId = pair.Key;
+				var orphanedFiles = pair.Value;
+
+				var doMoveFiles = false;
+				var artistDirectoryPath = string.Empty;
+
+				if (imageIdToArtistDirectory.ContainsKey(imageId))
+				{
+					// In this case, we know that we have already moved files for this imageId into the artistDirectory.
+					doMoveFiles = true;
+					artistDirectoryPath = imageIdToArtistDirectory[imageId];
+				}
+				else
+				{
+					// In this case, we need to check if there are any files for the imageId in the artistDirectory.
+					artistDirectoryPath =
+						GetArtistDirectoryPath(orphanedFiles.FilePaths[0], resultLogData) ?? string.Empty;
+					if (ArtistDirectoryContainsImageId(artistDirectoryPath, imageId))
+					{
+						doMoveFiles = true;
+						imageIdToArtistDirectory.Add(imageId, artistDirectoryPath);
+					}
+				}
+
+				if (doMoveFiles)
+				{
+					foreach (var oldFilePath in orphanedFiles.FilePaths)
+					{
+						var newFilePath = GetNewFilePath(oldFilePath, artistDirectoryPath);
+						filesToMoveSrcDst.Add(oldFilePath, newFilePath);
+					}
+				}
+				else
+				{
+					foreach (var orphanedFilePath in orphanedFiles.FilePaths)
+					{
+						DeleteOrphanedFile(orphanedFilePath, dryRunMessage, resultLogData.Files);
+					}
+				}
+			}
+		}
+
+		private bool ArtistDirectoryContainsImageId(string artistDirectoryPath, string imageId)
+		{
+			if (string.IsNullOrEmpty(artistDirectoryPath))
+			{
+				return false;
+			}
+			if (string.IsNullOrEmpty(imageId))
+			{
+				return false;
+			}
+
+			foreach (var filePath in Directory.EnumerateFiles(artistDirectoryPath))
+			{
+				var fileName = Path.GetFileName(filePath);
+				if (fileName.Contains(imageId))
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 
 		private string GetNewFilePath(string filePath, string artistDirectoryPath)
