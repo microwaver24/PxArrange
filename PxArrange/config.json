@@ -8,6 +8,7 @@
 	},
 	"IrfanViewRootPath": "D:\\H\\Px\\bin\\IrfanViewPortable\\",
 	"PixivUtil2RootPath": "D:\\H\\Px\\bin\\pixivutil20230105\\",
+	"SlideshowImageCount": 300,
 	"WriteToConsole": true,
 	"WriteToLogFile": true
 }

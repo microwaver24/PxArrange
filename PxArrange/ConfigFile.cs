@@ -11,6 +11,7 @@ namespace PxArrange
 		public ConfigFile_ImagesSubdirectories ImagesSubdirectories { get; set; } = new();
 		public bool WriteToLogFile { get; set; } = true;
 		public bool WriteToConsole { get; set; } = true;
+		public int SlideshowImageCount { get; set; } = 300;
 
 		static ConfigFile()
 		{
@@ -41,8 +42,6 @@ namespace PxArrange
 				Logger.Instance.Error($"Failed to read config file [{configFilePath}].", ex);
 			}
 		}
-
-		public static void Init() { }
 	}
 
 	public class ConfigFile_ImagesSubdirectories
