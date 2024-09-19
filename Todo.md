@@ -14,3 +14,5 @@
 1. Automatically open output.log after running? use config setting.
 1. Run irfanview with selected slideshow.
 1. make slideshow for all folder.
+1. combine multiple slideshows into one
+1. if an artist changed their name, there could be two or more folders for that artist. Combine the folders using the latest name.

@@ -14,6 +14,8 @@ namespace PxArrange
 		private int _slideshowIndex;
 		private static readonly string _outputDirectoryRootPath_Default = PxPaths.AllPath;
 		private string _outputDirectoryRootPath;
+		private static readonly Regex regexForImageId = new Regex(@"^(\d+)_.+");
+		private static readonly Regex regexForArtistId = new Regex(@"\((\d+)\)");
 
 		public MoveSlideshowImages()
 		{
@@ -77,7 +79,6 @@ namespace PxArrange
 
 		private List<string> ReadFromFile()
 		{
-			var regex = new Regex(@"\((\d+)\)");
 			var dryRunMessage = DoDryRun ? "DryRun: " : string.Empty;
 			var imagePathList = new List<string>();
 
@@ -94,127 +95,31 @@ namespace PxArrange
 			var directoriesVisitedSet = new HashSet<string>();
 			var filePath = string.Empty;
 
+			var imageIdToArtistDirectory = new Dictionary<string, string>();
+			var potentiallyOrphanedFiles = new Dictionary<string, OrphanedFileList>();
+			var filesToMoveSrcDst = new Dictionary<string, string>();
+
 			while ((filePath = reader.ReadLine()) != null)
 			{
-				if (string.IsNullOrWhiteSpace(filePath))
-				{
-					continue;
-				}
-
-				++resultLogData.Files.ImagesInSlideshow;
-
-				var directoryPath = Path.GetDirectoryName(filePath);
-				if (!string.IsNullOrEmpty(directoryPath))
-				{
-					VisitDirectory(directoryPath, directoriesVisitedSet);
-				}
-
-				if (!File.Exists(filePath))
-				{
-					Log($"File does not exist [{filePath}]");
-					++resultLogData.Files.NotFound;
-					continue;
-				}
-
-				//if (!filePath.Contains(Path.DirectorySeparatorChar))
-				//{
-				//	Log($"Not a file [{filePath}]");
-				//	++resultLogData.Files.Invalid;
-				//	continue;
-				//}
-
-				var fileName = Path.GetFileName(filePath);
-				var directoryIterator = Path.GetDirectoryName(filePath);
-				var artistDirectoryPath = string.Empty;
-
-				// todo: Maybe check the database for the proper artist directory name using the image id from the filename instead?
-				// or maybe use the json file for the image if there is one?
-				while (directoryIterator is not null)
-				{
-					var directoryName = Path.GetFileName(directoryIterator);
-					var match = regex.Match(directoryName);
-					if (match.Success)
-					{
-						artistDirectoryPath = directoryIterator;
-						break;
-					}
-					directoryIterator = Path.GetDirectoryName(directoryIterator);
-				}
-
-				if (string.IsNullOrEmpty(artistDirectoryPath))
-				{
-					Error($"Couldn't find an artist directory for image file [{filePath}]");
-					++resultLogData.Files.Invalid;
-					continue;
-				}
-
-				// If an image is in a subdirectory, then directoryPath and artistDirectoryPath might be different.
-				VisitDirectory(artistDirectoryPath, directoriesVisitedSet);
-
-				var artistDirectoryName = Path.GetFileName(artistDirectoryPath);
-				var newDirectory = Path.Combine(_outputDirectoryRootPath, artistDirectoryName);
-				var newFilePath = Path.Combine(_outputDirectoryRootPath, artistDirectoryName, fileName);
-
-				var filesToMove = new Dictionary<string, string> { { filePath, newFilePath }, };
-
-				// handle image json file, ugoira zip file, ugoira js file
-				foreach (var extension in PxPaths.OtherExtensionsWithoutDot)
-				{
-					// todo: Parse image id from path, look for all other images with matching id. It looks like the json file has a pageNumber = imageCount-1 instead of p0.
-					var otherFileOldPath = Path.ChangeExtension(filePath, extension);
-					var otherFileNewPath = Path.ChangeExtension(newFilePath, extension);
-					if (File.Exists(otherFileOldPath))
-					{
-						filesToMove.Add(otherFileOldPath, otherFileNewPath);
-					}
-				}
-
-				foreach (var kvp in filesToMove)
-				{
-					var oldPath = kvp.Key;
-					var newPath = kvp.Value;
-
-					try
-					{
-						if (!DoDryRun)
-						{
-							if (!Directory.Exists(newDirectory))
-							{
-								Directory.CreateDirectory(newDirectory);
-							}
-
-							File.Move(oldPath, newPath, overwrite: false);
-						}
-						Log($"{dryRunMessage}Move file [{oldPath}] to [{newPath}]");
-
-						var fileExtension = Path.GetExtension(newPath);
-						if (PxPaths.ValidImageExtensions.Contains(fileExtension))
-						{
-							++resultLogData.Files.Moved.Total;
-							++resultLogData.Files.Moved.Images;
-						}
-						else if (PxPaths.OtherExtensions.Contains(fileExtension))
-						{
-							++resultLogData.Files.Moved.Total;
-							++resultLogData.Files.Moved.Other;
-						}
-						else
-						{
-							++resultLogData.Files.Skipped;
-						}
-					}
-					catch (Exception ex)
-					{
-						Error($"Failure moving file [{oldPath}] {ex}");
-						++resultLogData.Files.Errors;
-						continue;
-					}
-
-					//++resultLogData.Files.Moved;
-				}
-
-				//++resultLogData.Files.MovedImages;
+				ProcessSingleFile(
+					filePath,
+					directoriesVisitedSet,
+					imageIdToArtistDirectory,
+					potentiallyOrphanedFiles,
+					filesToMoveSrcDst,
+					resultLogData
+				);
 			}
+
+			ProcessPotentiallyOrphanedFiles(
+				imageIdToArtistDirectory,
+				potentiallyOrphanedFiles,
+				filesToMoveSrcDst,
+				dryRunMessage,
+				resultLogData
+			);
+
+			MoveFilesSrcDst(filesToMoveSrcDst, dryRunMessage, resultLogData);
 
 			resultLogData.Files.ComputeTotal();
 			resultLogData.Directories.Total = directoriesVisitedSet.Count();
@@ -232,6 +137,247 @@ namespace PxArrange
 			);
 
 			return imagePathList;
+		}
+
+		/// <summary>
+		/// Figure out if a file exists and can be moved.
+		/// If there are other files like json or ugoira, see if they exist.
+		/// They will either need to be moved or they are orphaned and need to be deleted.
+		/// </summary>
+		private void ProcessSingleFile(
+			string filePath,
+			HashSet<string> directoriesVisitedSet,
+			Dictionary<string, string> imageIdToArtistDirectory,
+			Dictionary<string, OrphanedFileList> potentiallyOrphanedFiles,
+			Dictionary<string, string> filesToMoveSrcDst,
+			ResultLogData_All resultLogData
+		)
+		{
+			if (string.IsNullOrWhiteSpace(filePath))
+			{
+				// Blank lines in slideshow are ok.
+				return;
+			}
+
+			if (filePath.StartsWith(";"))
+			{
+				// This is a comment in the slideshow.
+				return;
+			}
+
+			var fileName = Path.GetFileName(filePath);
+			var matchImageId = regexForImageId.Match(fileName);
+			if (!matchImageId.Success)
+			{
+				Error($"Didn't find ImageId at start of name of file [{filePath}]");
+				++resultLogData.Files.Invalid;
+				return;
+			}
+
+			var imageIdString = matchImageId.Groups[1].Value;
+			var imageIdIsValid = int.TryParse(imageIdString, out int imageId);
+			if (!imageIdIsValid)
+			{
+				Error($"Couldn't parse an ImageId from the name of file [{filePath}]");
+				++resultLogData.Files.Invalid;
+				return;
+			}
+
+			++resultLogData.Files.ImagesInSlideshow;
+
+			var directoryPath = Path.GetDirectoryName(filePath);
+			if (!string.IsNullOrEmpty(directoryPath))
+			{
+				VisitDirectory(directoryPath, directoriesVisitedSet);
+			}
+
+			if (!File.Exists(filePath))
+			{
+				Log($"File does not exist [{filePath}]");
+				++resultLogData.Files.NotFound;
+
+				// handle image json file, ugoira zip file, ugoira js file, etc.
+				foreach (var extension in PxPaths.OtherExtensionsWithoutDot)
+				{
+					var otherFilePath = Path.ChangeExtension(filePath, extension);
+					if (!File.Exists(otherFilePath))
+					{
+						continue;
+					}
+
+					if (!potentiallyOrphanedFiles.ContainsKey(imageIdString))
+					{
+						potentiallyOrphanedFiles.Add(imageIdString, new OrphanedFileList());
+					}
+					potentiallyOrphanedFiles[imageIdString].Add(otherFilePath);
+				}
+
+				return;
+			}
+
+			//if (!filePath.Contains(Path.DirectorySeparatorChar))
+			//{
+			//	Log($"Not a file [{filePath}]");
+			//	++resultLogData.Files.Invalid;
+			//	continue;
+			//}
+
+			var artistDirectoryPath = GetArtistDirectoryPath(filePath, resultLogData);
+			if (string.IsNullOrEmpty(artistDirectoryPath))
+			{
+				// An error was already printed, just return.
+				return;
+			}
+			else
+			{
+				if (!imageIdToArtistDirectory.ContainsKey(imageIdString))
+				{
+					imageIdToArtistDirectory.Add(imageIdString, artistDirectoryPath);
+				}
+			}
+
+			// If an image is in a subdirectory, then directoryPath and artistDirectoryPath might be different.
+			VisitDirectory(artistDirectoryPath, directoriesVisitedSet);
+
+			var newFilePath = GetNewFilePath(filePath, artistDirectoryPath);
+
+			filesToMoveSrcDst.Add(filePath, newFilePath);
+
+			// handle image json file, ugoira zip file, ugoira js file, etc.
+			foreach (var extension in PxPaths.OtherExtensionsWithoutDot)
+			{
+				var otherFileOldPath = Path.ChangeExtension(filePath, extension);
+				var otherFileNewPath = Path.ChangeExtension(newFilePath, extension);
+				if (File.Exists(otherFileOldPath))
+				{
+					filesToMoveSrcDst.Add(otherFileOldPath, otherFileNewPath);
+				}
+			}
+		}
+
+		private void ProcessPotentiallyOrphanedFiles(
+			Dictionary<string, string> imageIdToArtistDirectory,
+			Dictionary<string, OrphanedFileList> potentiallyOrphanedFiles,
+			Dictionary<string, string> filesToMoveSrcDst,
+			string dryRunMessage,
+			ResultLogData_All resultLogData
+		)
+		{
+			foreach (var pair in potentiallyOrphanedFiles)
+			{
+				var imageId = pair.Key;
+				var orphanedFiles = pair.Value;
+				if (imageIdToArtistDirectory.ContainsKey(imageId))
+				{
+					var artistDirectoryPath = imageIdToArtistDirectory[imageId];
+					foreach (var oldFilePath in orphanedFiles.FilePaths)
+					{
+						var newFilePath = GetNewFilePath(oldFilePath, artistDirectoryPath);
+						filesToMoveSrcDst.Add(oldFilePath, newFilePath);
+					}
+				}
+				else
+				{
+					foreach (var orphanedFilePath in orphanedFiles.FilePaths)
+					{
+						DeleteOrphanedFile(orphanedFilePath, dryRunMessage, resultLogData.Files);
+					}
+				}
+			}
+		}
+
+		private string GetNewFilePath(string filePath, string artistDirectoryPath)
+		{
+			var artistDirectoryName = Path.GetFileName(artistDirectoryPath);
+			var fileName = Path.GetFileName(filePath);
+			var newFilePath = Path.Combine(_outputDirectoryRootPath, artistDirectoryName, fileName);
+			return newFilePath;
+		}
+
+		private void MoveFilesSrcDst(
+			Dictionary<string, string> filesToMoveSrcDst,
+			string dryRunMessage,
+			ResultLogData_All resultLogData
+		)
+		{
+			foreach (var kvp in filesToMoveSrcDst)
+			{
+				var oldPath = kvp.Key;
+				var newPath = kvp.Value;
+				var newDirectory = Path.GetDirectoryName(newPath);
+
+				if (string.IsNullOrWhiteSpace(newDirectory))
+				{
+					Error($"New file path doesn't have a directory [{newPath}]");
+					++resultLogData.Files.Invalid;
+					continue;
+				}
+
+				try
+				{
+					if (!DoDryRun)
+					{
+						if (!Directory.Exists(newDirectory))
+						{
+							Directory.CreateDirectory(newDirectory);
+						}
+
+						File.Move(oldPath, newPath, overwrite: false);
+					}
+					Log($"{dryRunMessage}Move file [{oldPath}] to [{newPath}]");
+
+					var fileExtension = Path.GetExtension(newPath);
+					if (PxPaths.ValidImageExtensions.Contains(fileExtension))
+					{
+						++resultLogData.Files.Moved.Total;
+						++resultLogData.Files.Moved.Images;
+					}
+					else if (PxPaths.OtherExtensions.Contains(fileExtension))
+					{
+						++resultLogData.Files.Moved.Total;
+						++resultLogData.Files.Moved.Other;
+					}
+					else
+					{
+						++resultLogData.Files.Skipped;
+					}
+				}
+				catch (Exception ex)
+				{
+					Error($"Failure moving file [{oldPath}] {ex}");
+					++resultLogData.Files.Errors;
+					continue;
+				}
+			}
+		}
+
+		private string? GetArtistDirectoryPath(string filePath, ResultLogData_All resultLogData)
+		{
+			var directoryIterator = Path.GetDirectoryName(filePath);
+			var artistDirectoryPath = string.Empty;
+
+			// todo: Maybe check the database for the proper artist directory name using the image id from the filename instead?
+			// or maybe use the json file for the image if there is one?
+			while (directoryIterator is not null)
+			{
+				var directoryName = Path.GetFileName(directoryIterator);
+				var match = regexForArtistId.Match(directoryName);
+				if (match.Success)
+				{
+					artistDirectoryPath = directoryIterator;
+					break;
+				}
+				directoryIterator = Path.GetDirectoryName(directoryIterator);
+			}
+
+			if (string.IsNullOrEmpty(artistDirectoryPath))
+			{
+				Error($"Couldn't find an artist directory for image file [{filePath}]");
+				++resultLogData.Files.Invalid;
+				return null;
+			}
+
+			return artistDirectoryPath;
 		}
 
 		private void VisitDirectory(string directoryPath, HashSet<string> directoriesVisitedSet)
@@ -276,6 +422,32 @@ namespace PxArrange
 				Log($"Directory [{directoryPath}] not deleted because it's not empty");
 				++resultLogData.Skipped;
 			}
+		}
+
+		private void DeleteOrphanedFile(string filePath, string dryRunMessage, ResultLogData_Files resultLogData)
+		{
+			if (!File.Exists(filePath))
+			{
+				++resultLogData.NotFound;
+				return;
+			}
+
+			try
+			{
+				if (!DoDryRun)
+				{
+					File.Delete(filePath);
+				}
+			}
+			catch (Exception ex)
+			{
+				Error($"Failure deleting file [{filePath}] {ex}");
+				++resultLogData.Errors;
+				return;
+			}
+
+			Log($"{dryRunMessage}Delete orphaned file [{filePath}]");
+			++resultLogData.Deleted;
 		}
 
 		//private void UpdateDatabase()
@@ -325,6 +497,8 @@ namespace PxArrange
 	{
 		public ResultLogData_FilesMoved Moved { get; set; } = new();
 
+		public int Deleted { get; set; } = 0;
+
 		[JsonPropertyName("Skipped (Unexpected Type)")]
 		public int Skipped { get; set; } = 0;
 
@@ -370,5 +544,15 @@ namespace PxArrange
 		public string OutputDirectoryRoot { get; set; } = string.Empty;
 		public ResultLogData_Files Files { get; set; } = new();
 		public ResultLogData_Directories Directories { get; set; } = new();
+	}
+
+	public class OrphanedFileList
+	{
+		public List<string> FilePaths = new();
+
+		public void Add(string filePath)
+		{
+			FilePaths.Add(filePath);
+		}
 	}
 }
