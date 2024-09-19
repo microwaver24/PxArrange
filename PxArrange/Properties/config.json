@@ -1,0 +1,13 @@
+{
+	"PixivUtil2RootPath": "D:\\H\\Px\\bin\\pixivutil20230105\\",
+	"IrfanViewRootPath": "D:\\H\\Px\\bin\\IrfanViewPortable\\",
+	"ImagesRootPath": "D:\\H\\Px\\pixiv\\",
+	"ImagesSubdirectories": {
+		"Fresh": "fresh",
+		"All": "all",
+		"Bad": "bad",
+		"Slideshow": "slideshow"
+	},
+	"WriteToLogFile": true,
+	"WriteToConsole": true
+}

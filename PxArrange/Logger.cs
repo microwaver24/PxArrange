@@ -16,29 +16,39 @@ namespace PxArrange
 
 		public const string LogFileName = @"output.log";
 		public static string LogFilePath => Path.GetFullPath(LogFileName);
-		public readonly StreamWriter LogFile;
-		private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions()
+		public static readonly List<StreamWriter> LogFiles = new();
+		public static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions()
 		{
 			WriteIndented = true,
 			AllowTrailingCommas = true,
 		};
 
-		public Logger()
+		static Logger()
 		{
-			var logFilePath = LogFilePath;
-			if (File.Exists(logFilePath))
+			if (ConfigFile.Instance.WriteToLogFile)
 			{
-				File.Delete(logFilePath);
-			}
-			LogFile = new StreamWriter(logFilePath, true);
+				var logFilePath = LogFilePath;
+				if (File.Exists(logFilePath))
+				{
+					File.Delete(logFilePath);
+				}
+				LogFiles.Add(new StreamWriter(logFilePath, true));
 
-			Console.WriteLine($"Sending output to file [{logFilePath}]");
+				Console.WriteLine($"Sending output to file [{logFilePath}]");
+			}
+			if (ConfigFile.Instance.WriteToConsole)
+			{
+				LogFiles.Add(new StreamWriter(Console.OpenStandardOutput()));
+			}
 		}
 
 		~Logger()
 		{
-			LogFile.Flush();
-			LogFile.Close();
+			foreach (var logFile in LogFiles)
+			{
+				logFile.Flush();
+				logFile.Close();
+			}
 		}
 
 		public void Log(params object[] args)
@@ -59,8 +69,11 @@ namespace PxArrange
 		private void LogInner(string tag, params object[] args)
 		{
 			var message = ArgsToStringBuilder(tag, args);
-			LogFile.WriteLine(message);
-			LogFile.Flush();
+			foreach (var logFile in LogFiles)
+			{
+				logFile.WriteLine(message);
+				logFile.Flush();
+			}
 		}
 
 		public StringBuilder ArgsToStringBuilder(string tag, params object[] args)
@@ -104,7 +117,7 @@ namespace PxArrange
 
 		public static string ToJsonString(object obj)
 		{
-			return JsonSerializer.Serialize(obj, _jsonOptions);
+			return JsonSerializer.Serialize(obj, JsonOptions);
 		}
 	}
 }
