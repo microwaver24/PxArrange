@@ -23,7 +23,11 @@ namespace PxArrange
 				"Gather all the images in the fresh folder and make slideshows. Each slideshow has a goal number of images that should be in it."
 			);
 
-			HasOption("d|dry-run", "Do a dry run to see what will be changed.", b => DoDryRun = b != null);
+			HasOption(
+				"d|dry-run:",
+				"Do a dry run to see what will be changed.",
+				b => DoDryRun = b == null ? true : bool.Parse(b)
+			);
 
 			var slideshowImageCount = ConfigFile.Instance.SlideshowImageCount;
 			HasOption(
