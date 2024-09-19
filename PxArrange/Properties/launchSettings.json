@@ -5,11 +5,11 @@
     },
     "MoveSlideshow": {
       "commandName": "Project",
-      "commandLineArgs": "MoveSlideshow --index=5"
+      "commandLineArgs": "MoveSlideshow --index=0 --dry-run=true"
     },
     "MakeSlideshows": {
       "commandName": "Project",
-      "commandLineArgs": "MakeSlideshows"
+      "commandLineArgs": "MakeSlideshows --dry-run=true"
     }
   }
 }
